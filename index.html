@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AM 打ち合わせダッシュボード</title>
+  <style>
+    :root {
+      --green: #00A878;
+      --dkgreen: #005A3E;
+      --ltgreen: #7FCFB8;
+      --blue: #3B82C4;
+      --red: #E85555;
+      --yellow: #F0C040;
+      --gray: #888888;
+      --lgray: #F5F5F5;
+      --mgray: #DDDDDD;
+      --text: #333333;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Hiragino Sans', 'YuGothic', sans-serif; background: #F0F2F5; color: var(--text); }
+
+    /* ── ヘッダー ── */
+    header {
+      background: var(--dkgreen);
+      color: white;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 18px; }
+    header button {
+      background: var(--green);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    /* ── レイアウト ── */
+    .container { display: flex; height: calc(100vh - 52px); }
+
+    /* ── 左：顧客一覧 ── */
+    .sidebar {
+      width: 420px;
+      min-width: 420px;
+      background: white;
+      border-right: 1px solid var(--mgray);
+      display: flex;
+      flex-direction: column;
+    }
+    .search-box {
+      padding: 12px;
+      border-bottom: 1px solid var(--mgray);
+    }
+    .search-box input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--mgray);
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .filter-btns {
+      display: flex;
+      gap: 6px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--mgray);
+    }
+    .filter-btns button {
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--mgray);
+      background: white;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--gray);
+    }
+    .filter-btns button.active {
+      background: var(--green);
+      color: white;
+      border-color: var(--green);
+    }
+    .customer-list { overflow-y: auto; flex: 1; }
+    .customer-item {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--lgray);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .customer-item:hover { background: #f0faf6; }
+    .customer-item.active { background: #EEF9F5; border-left: 3px solid var(--green); }
+    .customer-name { font-weight: bold; font-size: 14px; margin-bottom: 2px; }
+    .customer-brand { color: var(--gray); font-size: 12px; margin-bottom: 4px; }
+    .customer-meta { display: flex; justify-content: space-between; align-items: center; }
+    .customer-contact { font-size: 12px; color: var(--gray); }
+    .alert-badge {
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: bold;
+    }
+    .alert-red    { background: #FFE8E8; color: var(--red); }
+    .alert-yellow { background: #FFF8E7; color: #996600; }
+    .alert-green  { background: #EEF9F5; color: var(--dkgreen); }
+
+    /* ── 右：顧客詳細 ── */
+    .detail {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .detail-header {
+      background: var(--dkgreen);
+      color: white;
+      padding: 14px 24px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .detail-body { flex: 1; overflow-y: auto; padding: 20px; }
+    .info-card {
+      background: var(--lgray);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .info-item label { font-size: 12px; color: var(--gray); display: block; margin-bottom: 2px; }
+    .info-item span  { font-size: 14px; font-weight: bold; }
+    .next-contact-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .next-contact-field input[type="date"] {
+      padding: 6px 10px;
+      border: 2px solid var(--green);
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--dkgreen);
+      cursor: pointer;
+    }
+    .alert-overdue { color: var(--red); font-size: 12px; font-weight: bold; }
+    .alert-soon    { color: #996600; font-size: 12px; font-weight: bold; }
+
+    /* ── 議事録 ── */
+    .meeting-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .meeting-header h3 { font-size: 16px; color: var(--dkgreen); font-weight: bold; }
+    .add-meeting-btn {
+      background: var(--green);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .meeting-card {
+      background: white;
+      border: 1.5px solid var(--mgray);
+      border-radius: 8px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .meeting-card.latest { border-color: var(--green); }
+    .meeting-card-header {
+      background: var(--lgray);
+      padding: 10px 14px;
+      font-weight: bold;
+      font-size: 13px;
+      color: var(--dkgreen);
+      display: flex;
+      justify-content: space-between;
+    }
+    .meeting-card.latest .meeting-card-header { background: #EEF9F5; }
+    .meeting-card-body { padding: 12px 14px; }
+    .meeting-section { margin-bottom: 8px; }
+    .meeting-section label { font-size: 11px; color: var(--gray); font-weight: bold; display: block; margin-bottom: 4px; }
+    .meeting-section p { font-size: 13px; line-height: 1.6; }
+    .action-tag {
+      display: inline-block;
+      background: #EEF9F5;
+      border: 1px solid var(--ltgreen);
+      color: var(--dkgreen);
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .empty-state {
+      text-align: center;
+      color: var(--gray);
+      padding: 60px 20px;
+      font-size: 15px;
+    }
+
+    /* ── モーダル ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: white;
+      border-radius: 10px;
+      width: 520px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+    .modal-header {
+      background: var(--green);
+      color: white;
+      padding: 14px 20px;
+      font-weight: bold;
+      font-size: 15px;
+      border-radius: 10px 10px 0 0;
+      display: flex;
+      justify-content: space-between;
+    }
+    .modal-header button {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .modal-body { padding: 20px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 13px; color: var(--gray); margin-bottom: 6px; font-weight: bold; }
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--mgray);
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    .form-group input[type="date"] { border-color: var(--green); color: var(--dkgreen); font-weight: bold; }
+    .form-group textarea { min-height: 80px; resize: vertical; }
+    .save-btn {
+      width: 100%;
+      background: var(--green);
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .save-btn:hover { background: var(--dkgreen); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📋 AM 打ち合わせダッシュボード</h1>
+  <button onclick="openAddCustomerModal()">＋ 顧客追加</button>
+</header>
+
+<div class="container">
+  <!-- 左：顧客一覧 -->
+  <div class="sidebar">
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="🔍 会社名・ブランド名で検索..." oninput="renderList()">
+    </div>
+    <div class="filter-btns">
+      <button class="active" onclick="setFilter('all', this)">全て</button>
+      <button onclick="setFilter('red', this)">🔴 要連絡</button>
+      <button onclick="setFilter('yellow', this)">🟡 注意</button>
+      <button onclick="setFilter('green', this)">🟢 正常</button>
+    </div>
+    <div class="customer-list" id="customerList"></div>
+  </div>
+
+  <!-- 右：詳細 -->
+  <div class="detail">
+    <div class="detail-header" id="detailHeader">顧客を選択してください</div>
+    <div class="detail-body" id="detailBody">
+      <div class="empty-state">← 左のリストから顧客を選択してください</div>
+    </div>
+  </div>
+</div>
+
+<!-- 議事録追加モーダル -->
+<div class="modal-overlay" id="meetingModal">
+  <div class="modal">
+    <div class="modal-header">
+      📝 議事録を追加
+      <button onclick="closeModal('meetingModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>日付</label>
+        <input type="date" id="meetingDate">
+      </div>
+      <div class="form-group">
+        <label>話したこと</label>
+        <textarea id="meetingNotes" placeholder="・&#10;・"></textarea>
+      </div>
+      <div class="form-group">
+        <label>ネクストアクション</label>
+        <input type="text" id="meetingAction" placeholder="例：資料を送付する（〜4/5）">
+      </div>
+      <div class="form-group">
+        <label>次回連絡日 📅</label>
+        <input type="date" id="meetingNextContact">
+      </div>
+      <button class="save-btn" onclick="saveMeeting()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- 顧客追加モーダル -->
+<div class="modal-overlay" id="addCustomerModal">
+  <div class="modal">
+    <div class="modal-header">
+      ＋ 顧客を追加
+      <button onclick="closeModal('addCustomerModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>会社名</label>
+        <input type="text" id="newCompany" placeholder="例：軽井沢ブルワリー株式会社">
+      </div>
+      <div class="form-group">
+        <label>ブランド名</label>
+        <input type="text" id="newBrand" placeholder="例：karuizawa-brewery">
+      </div>
+      <div class="form-group">
+        <label>担当者名</label>
+        <input type="text" id="newContact" placeholder="例：田中 花子">
+      </div>
+      <div class="form-group">
+        <label>連絡先（メール）</label>
+        <input type="text" id="newEmail" placeholder="例：tanaka@example.com">
+      </div>
+      <div class="form-group">
+        <label>契約開始日</label>
+        <input type="date" id="newContractStart">
+      </div>
+      <div class="form-group">
+        <label>アラート日数（日経過で通知）</label>
+        <input type="number" id="newAlertDays" value="14" min="1" max="90">
+      </div>
+      <button class="save-btn" onclick="saveCustomer()">追加する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── データ管理 ──────────────────────────────
+const GIST_ID = ''; // 後で設定
+const GITHUB_TOKEN = ''; // 後で設定（GitHub PAT）
+
+let customers = JSON.parse(localStorage.getItem('am_customers') || '[]');
+let currentCustomerId = null;
+let currentFilter = 'all';
+
+// ── アラート判定 ──────────────────────────────
+function getAlertStatus(customer) {
+  if (!customer.nextContact) return 'green';
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const next = new Date(customer.nextContact);
+  const diff = Math.floor((next - today) / (1000*60*60*24));
+  if (diff < 0)  return 'red';
+  if (diff <= 3) return 'yellow';
+  return 'green';
+}
+
+function getAlertLabel(customer) {
+  if (!customer.nextContact) return '未設定';
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const next = new Date(customer.nextContact);
+  const diff = Math.floor((next - today) / (1000*60*60*24));
+  if (diff < 0)  return `🔴 ${Math.abs(diff)}日超過`;
+  if (diff === 0) return '🔴 今日';
+  if (diff <= 3) return `🟡 ${diff}日後`;
+  return `🟢 ${next.toLocaleDateString('ja-JP',{month:'numeric',day:'numeric'})}`;
+}
+
+// ── 顧客一覧レンダリング ──────────────────────
+function renderList() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const list = document.getElementById('customerList');
+  list.innerHTML = '';
+
+  const filtered = customers.filter(c => {
+    const matchSearch = !q ||
+      c.company.toLowerCase().includes(q) ||
+      c.brand.toLowerCase().includes(q);
+    const status = getAlertStatus(c);
+    const matchFilter = currentFilter === 'all' || status === currentFilter;
+    return matchSearch && matchFilter;
+  });
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty-state">顧客が見つかりません</div>';
+    return;
+  }
+
+  // アラート順でソート（red → yellow → green）
+  const order = {red:0, yellow:1, green:2};
+  filtered.sort((a,b) => order[getAlertStatus(a)] - order[getAlertStatus(b)]);
+
+  filtered.forEach(c => {
+    const status = getAlertStatus(c);
+    const div = document.createElement('div');
+    div.className = `customer-item${c.id === currentCustomerId ? ' active' : ''}`;
+    div.onclick = () => selectCustomer(c.id);
+    div.innerHTML = `
+      <div class="customer-name">${c.company}</div>
+      <div class="customer-brand">${c.brand}</div>
+      <div class="customer-meta">
+        <span class="customer-contact">${c.contact} / ${c.email}</span>
+        <span class="alert-badge alert-${status}">${getAlertLabel(c)}</span>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ── 顧客詳細レンダリング ──────────────────────
+function selectCustomer(id) {
+  currentCustomerId = id;
+  renderList();
+  renderDetail();
+}
+
+function renderDetail() {
+  const c = customers.find(c => c.id === currentCustomerId);
+  if (!c) return;
+
+  document.getElementById('detailHeader').textContent = c.company;
+
+  const status = getAlertStatus(c);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const next = c.nextContact ? new Date(c.nextContact) : null;
+  const diff = next ? Math.floor((next - today)/(1000*60*60*24)) : null;
+
+  let alertHtml = '';
+  if (diff !== null && diff < 0)
+    alertHtml = `<span class="alert-overdue">🔴 ${Math.abs(diff)}日超過しています</span>`;
+  else if (diff !== null && diff <= 3)
+    alertHtml = `<span class="alert-soon">🟡 ${diff}日後が連絡予定です</span>`;
+
+  const meetings = (c.meetings || []).slice().reverse();
+
+  document.getElementById('detailBody').innerHTML = `
+    <div class="info-card">
+      <div class="info-item">
+        <label>ブランド名</label>
+        <span>${c.brand}</span>
+      </div>
+      <div class="info-item">
+        <label>担当者</label>
+        <span>${c.contact}　${c.email}</span>
+      </div>
+      <div class="info-item">
+        <label>契約開始日</label>
+        <span>${c.contractStart || '未設定'}</span>
+      </div>
+      <div class="info-item">
+        <label>次回連絡日 📅 ${alertHtml}</label>
+        <div class="next-contact-field">
+          <input type="date" value="${c.nextContact || ''}"
+            onchange="updateNextContact('${c.id}', this.value)">
+        </div>
+      </div>
+    </div>
+
+    <div class="meeting-header">
+      <h3>議事録</h3>
+      <button class="add-meeting-btn" onclick="openMeetingModal()">＋ 議事録を追加</button>
+    </div>
+
+    ${meetings.length === 0
+      ? '<div class="empty-state">まだ議事録がありません</div>'
+      : meetings.map((m, i) => `
+        <div class="meeting-card ${i===0 ? 'latest' : ''}">
+          <div class="meeting-card-header">
+            📅 ${m.date}
+          </div>
+          <div class="meeting-card-body">
+            <div class="meeting-section">
+              <label>話したこと</label>
+              <p>${m.notes.replace(/\n/g,'<br>')}</p>
+            </div>
+            ${m.action ? `
+            <div class="meeting-section">
+              <label>ネクストアクション</label>
+              <span class="action-tag">✅ ${m.action}</span>
+            </div>` : ''}
+          </div>
+        </div>
+      `).join('')
+    }
+  `;
+}
+
+// ── 操作ハンドラ ──────────────────────────────
+function updateNextContact(id, value) {
+  const c = customers.find(c => c.id === id);
+  if (c) {
+    c.nextContact = value;
+    save();
+    renderList();
+    renderDetail();
+  }
+}
+
+function setFilter(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btns button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderList();
+}
+
+function openMeetingModal() {
+  document.getElementById('meetingDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('meetingNotes').value = '';
+  document.getElementById('meetingAction').value = '';
+  document.getElementById('meetingNextContact').value = '';
+  document.getElementById('meetingModal').classList.add('open');
+}
+
+function openAddCustomerModal() {
+  document.getElementById('addCustomerModal').classList.add('open');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function saveMeeting() {
+  const c = customers.find(c => c.id === currentCustomerId);
+  if (!c) return;
+  if (!c.meetings) c.meetings = [];
+
+  const nextContact = document.getElementById('meetingNextContact').value;
+  c.meetings.push({
+    date:   document.getElementById('meetingDate').value,
+    notes:  document.getElementById('meetingNotes').value,
+    action: document.getElementById('meetingAction').value,
+  });
+  if (nextContact) c.nextContact = nextContact;
+
+  save();
+  closeModal('meetingModal');
+  renderList();
+  renderDetail();
+}
+
+function saveCustomer() {
+  const company = document.getElementById('newCompany').value.trim();
+  if (!company) { alert('会社名を入力してください'); return; }
+
+  customers.push({
+    id:            Date.now().toString(),
+    company,
+    brand:         document.getElementById('newBrand').value.trim(),
+    contact:       document.getElementById('newContact').value.trim(),
+    email:         document.getElementById('newEmail').value.trim(),
+    contractStart: document.getElementById('newContractStart').value,
+    alertDays:     parseInt(document.getElementById('newAlertDays').value) || 14,
+    nextContact:   '',
+    meetings:      [],
+  });
+
+  save();
+  closeModal('addCustomerModal');
+  renderList();
+}
+
+function save() {
+  localStorage.setItem('am_customers', JSON.stringify(customers));
+}
+
+// ── 初期化 ────────────────────────────────────
+// サンプルデータ（初回のみ）
+if (customers.length === 0) {
+  customers = [
+    {
+      id: '1', company: '軽井沢ブルワリー株式会社',
+      brand: 'karuizawa-brewery', contact: '田中 花子',
+      email: 'tanaka@r6b.jp', contractStart: '2023-04-11',
+      alertDays: 14, nextContact: '', meetings: []
+    },
+    {
+      id: '2', company: 'たねや・クラブハリエ',
+      brand: 'taneya', contact: '佐藤 一郎',
+      email: 'sato@taneya.co.jp', contractStart: '2023-10-01',
+      alertDays: 14, nextContact: new Date(Date.now()+3*86400000).toISOString().split('T')[0],
+      meetings: []
+    },
+    {
+      id: '3', company: 'HORIGUCHI COFFEE',
+      brand: 'horiguchi-coffee', contact: '鈴木 次郎',
+      email: 'suzuki@horiguchi.jp', contractStart: '2022-06-01',
+      alertDays: 14, nextContact: new Date(Date.now()+14*86400000).toISOString().split('T')[0],
+      meetings: []
+    },
+  ];
+  save();
+}
+
+renderList();
+</script>
+</body>
+</html>
