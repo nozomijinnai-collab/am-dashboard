@@ -595,35 +595,23 @@ function save() {
   localStorage.setItem('am_customers', JSON.stringify(customers));
 }
 
-// ── 初期化 ────────────────────────────────────
-// サンプルデータ（初回のみ）
-if (customers.length === 0) {
-  customers = [
-    {
-      id: '1', company: '軽井沢ブルワリー株式会社',
-      brand: 'karuizawa-brewery', contact: '田中 花子',
-      email: 'tanaka@r6b.jp', contractStart: '2023-04-11',
-      alertDays: 14, nextContact: '', meetings: []
-    },
-    {
-      id: '2', company: 'たねや・クラブハリエ',
-      brand: 'taneya', contact: '佐藤 一郎',
-      email: 'sato@taneya.co.jp', contractStart: '2023-10-01',
-      alertDays: 14, nextContact: new Date(Date.now()+3*86400000).toISOString().split('T')[0],
-      meetings: []
-    },
-    {
-      id: '3', company: 'HORIGUCHI COFFEE',
-      brand: 'horiguchi-coffee', contact: '鈴木 次郎',
-      email: 'suzuki@horiguchi.jp', contractStart: '2022-06-01',
-      alertDays: 14, nextContact: new Date(Date.now()+14*86400000).toISOString().split('T')[0],
-      meetings: []
-    },
-  ];
-  save();
+// ── 初期化：HubSpotデータを自動ロード ────────────────
+async function init() {
+  if (customers.length === 0) {
+    try {
+      const res = await fetch('./customers_init.json');
+      const data = await res.json();
+      customers = data;
+      save();
+      console.log(`HubSpotデータ読み込み完了: ${customers.length}件`);
+    } catch(e) {
+      console.warn('customers_init.json の読み込みに失敗しました', e);
+    }
+  }
+  renderList();
 }
 
-renderList();
+init();
 </script>
 </body>
 </html>
