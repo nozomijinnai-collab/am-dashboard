@@ -272,7 +272,10 @@
 
 <header>
   <h1>📋 AM 打ち合わせダッシュボード</h1>
-  <button onclick="openAddCustomerModal()">＋ 顧客追加</button>
+  <div style="display:flex;gap:8px;">
+    <button onclick="openAddCustomerModal()">＋ 顧客追加</button>
+    <button onclick="openTokenModal()" style="background:#005A3E;border:1px solid #7FCFB8;">⚙ 設定</button>
+  </div>
 </header>
 
 <div class="container">
@@ -328,6 +331,33 @@
   </div>
 </div>
 
+<!-- トークン設定モーダル -->
+<div class="modal-overlay" id="tokenModal">
+  <div class="modal">
+    <div class="modal-header">
+      ⚙ GitHub トークン設定
+      <button onclick="closeModal('tokenModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#888;margin-bottom:16px;line-height:1.6;">
+        議事録や次回連絡日をチームで共有するために<br>
+        GitHub Personal Access Token（PAT）が必要です。<br><br>
+        <strong>取得方法：</strong><br>
+        GitHub → Settings → Developer settings<br>
+        → Personal access tokens → Tokens (classic)<br>
+        → Generate new token<br>
+        → <code>gist</code> スコープにチェックして生成
+      </p>
+      <div class="form-group">
+        <label>GitHub PAT（ghp_xxx...）</label>
+        <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxx"
+          value="">
+      </div>
+      <button class="save-btn" onclick="saveToken()">保存する</button>
+    </div>
+  </div>
+</div>
+
 <!-- 顧客追加モーダル -->
 <div class="modal-overlay" id="addCustomerModal">
   <div class="modal">
@@ -367,10 +397,13 @@
 
 <script>
 // ── データ管理 ──────────────────────────────
-const GIST_ID = ''; // 後で設定
-const GITHUB_TOKEN = ''; // 後で設定（GitHub PAT）
+const GIST_ID = '01d7479197553f8c5d38bda60bce32e8';
+const GIST_FILE = 'am_dashboard_data.json';
 
-let customers = JSON.parse(localStorage.getItem('am_customers') || '[]');
+let customers = [];
+let gistData = { updates: {} }; // Gistから取得した共有データ
+
+function getToken() { return localStorage.getItem('gh_token') || ''; }
 let currentCustomerId = null;
 let currentFilter = 'all';
 
@@ -522,7 +555,10 @@ function updateNextContact(id, value) {
   const c = customers.find(c => c.id === id);
   if (c) {
     c.nextContact = value;
+    if (!gistData.updates[id]) gistData.updates[id] = {};
+    gistData.updates[id].nextContact = value;
     save();
+    saveGist();
     renderList();
     renderDetail();
   }
@@ -551,7 +587,7 @@ function closeModal(id) {
   document.getElementById(id).classList.remove('open');
 }
 
-function saveMeeting() {
+async function saveMeeting() {
   const c = customers.find(c => c.id === currentCustomerId);
   if (!c) return;
   if (!c.meetings) c.meetings = [];
@@ -564,10 +600,18 @@ function saveMeeting() {
   });
   if (nextContact) c.nextContact = nextContact;
 
+  // Gistに反映
+  if (!gistData.updates[c.id]) gistData.updates[c.id] = {};
+  gistData.updates[c.id].meetings    = c.meetings;
+  gistData.updates[c.id].nextContact = c.nextContact;
+
   save();
-  closeModal('meetingModal');
-  renderList();
-  renderDetail();
+  const ok = await saveGist();
+  if (ok) {
+    closeModal('meetingModal');
+    renderList();
+    renderDetail();
+  }
 }
 
 function saveCustomer() {
@@ -591,24 +635,122 @@ function saveCustomer() {
   renderList();
 }
 
+// ── Gist 読み書き ──────────────────────────────
+async function loadGist() {
+  try {
+    const res = await fetch(
+      `https://api.github.com/gists/${GIST_ID}`,
+      { headers: getToken() ? { Authorization: `token ${getToken()}` } : {} }
+    );
+    const data = await res.json();
+    const content = data.files[GIST_FILE]?.content;
+    if (content) gistData = JSON.parse(content);
+  } catch(e) { console.warn('Gist読み込み失敗:', e); }
+}
+
+async function saveGist() {
+  const token = getToken();
+  if (!token) {
+    alert('GitHubトークンが設定されていません。右上の⚙設定から入力してください。');
+    return false;
+  }
+  try {
+    await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `token ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        files: { [GIST_FILE]: { content: JSON.stringify(gistData, null, 2) } }
+      }),
+    });
+    return true;
+  } catch(e) {
+    alert('保存に失敗しました: ' + e.message);
+    return false;
+  }
+}
+
+// Gistの更新データを顧客にマージ
+function mergeGistData() {
+  customers.forEach(c => {
+    const u = gistData.updates[c.id];
+    if (u) {
+      if (u.nextContact !== undefined) c.nextContact = u.nextContact;
+      if (u.alertDays   !== undefined) c.alertDays   = u.alertDays;
+      if (u.meetings    !== undefined) c.meetings    = u.meetings;
+    }
+  });
+}
+
 function save() {
+  // localStorageにもキャッシュ（オフライン対応）
   localStorage.setItem('am_customers', JSON.stringify(customers));
 }
 
-// ── 初期化：HubSpotデータを自動ロード ────────────────
+// ── 初期化 ────────────────────────────────────
 async function init() {
-  if (customers.length === 0) {
-    try {
-      const res = await fetch('./customers_init.json');
-      const data = await res.json();
-      customers = data;
-      save();
-      console.log(`HubSpotデータ読み込み完了: ${customers.length}件`);
-    } catch(e) {
-      console.warn('customers_init.json の読み込みに失敗しました', e);
-    }
+  // 1. HubSpot顧客マスタを読み込む
+  try {
+    const res = await fetch('./customers_init.json');
+    customers = await res.json();
+    console.log(`顧客マスタ読み込み: ${customers.length}件`);
+  } catch(e) {
+    // fallback: localStorageキャッシュ
+    customers = JSON.parse(localStorage.getItem('am_customers') || '[]');
+    console.warn('customers_init.json 読み込み失敗、キャッシュを使用');
   }
+
+  // 2. Gistから共有データ（議事録・次回連絡日）を読み込んでマージ
+  await loadGist();
+  mergeGistData();
+
+  save(); // キャッシュ更新
   renderList();
+
+  // トークン未設定なら案内
+  if (!getToken()) {
+    showTokenBanner();
+  }
+}
+
+function showTokenBanner() {
+  const banner = document.createElement('div');
+  banner.id = 'tokenBanner';
+  banner.style.cssText = `
+    position:fixed; bottom:16px; right:16px;
+    background:#005A3E; color:white; padding:12px 16px;
+    border-radius:8px; font-size:13px; z-index:200;
+    box-shadow:0 4px 12px rgba(0,0,0,0.2); max-width:280px;
+  `;
+  banner.innerHTML = `
+    ⚙ GitHubトークンを設定すると議事録を保存できます<br>
+    <button onclick="openTokenModal()" style="
+      margin-top:8px; background:white; color:#005A3E;
+      border:none; padding:6px 12px; border-radius:4px;
+      cursor:pointer; font-weight:bold; width:100%;
+    ">トークンを設定する</button>
+    <button onclick="document.getElementById('tokenBanner').remove()" style="
+      margin-top:4px; background:transparent; color:#7FCFB8;
+      border:none; cursor:pointer; font-size:11px; width:100%;
+    ">あとで設定する</button>
+  `;
+  document.body.appendChild(banner);
+}
+
+function openTokenModal() {
+  document.getElementById('tokenBanner')?.remove();
+  document.getElementById('tokenModal').classList.add('open');
+}
+
+function saveToken() {
+  const token = document.getElementById('tokenInput').value.trim();
+  if (token) {
+    localStorage.setItem('gh_token', token);
+    closeModal('tokenModal');
+    alert('トークンを保存しました！');
+  }
 }
 
 init();
