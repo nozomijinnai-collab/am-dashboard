@@ -182,7 +182,18 @@
       color: var(--dkgreen);
       display: flex;
       justify-content: space-between;
+      align-items: center;
     }
+    .edit-meeting-btn {
+      background: none;
+      border: 1px solid var(--mgray);
+      color: var(--gray);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .edit-meeting-btn:hover { background: var(--lgray); color: var(--text); }
     .meeting-card.latest .meeting-card-header { background: #EEF9F5; }
     .meeting-card-body { padding: 12px 14px; }
     .meeting-section { margin-bottom: 8px; }
@@ -306,7 +317,7 @@
 <div class="modal-overlay" id="meetingModal">
   <div class="modal">
     <div class="modal-header">
-      📝 議事録を追加
+      <span>📝 議事録を追加</span>
       <button onclick="closeModal('meetingModal')">✕</button>
     </div>
     <div class="modal-body">
@@ -531,7 +542,8 @@ function renderDetail() {
       : meetings.map((m, i) => `
         <div class="meeting-card ${i===0 ? 'latest' : ''}">
           <div class="meeting-card-header">
-            📅 ${m.date}
+            <span>📅 ${m.date}</span>
+            <button class="edit-meeting-btn" onclick="openEditMeetingModal(${i})">✏️ 編集</button>
           </div>
           <div class="meeting-card-body">
             <div class="meeting-section">
@@ -571,10 +583,32 @@ function setFilter(filter, btn) {
   renderList();
 }
 
+let editingMeetingIndex = null; // 編集中の議事録インデックス（nullは新規）
+
 function openMeetingModal() {
+  editingMeetingIndex = null;
+  document.querySelector('#meetingModal .modal-header span').textContent = '📝 議事録を追加';
   document.getElementById('meetingDate').value = new Date().toISOString().split('T')[0];
   document.getElementById('meetingNotes').value = '';
   document.getElementById('meetingAction').value = '';
+  document.getElementById('meetingNextContact').value = '';
+  document.getElementById('meetingModal').classList.add('open');
+}
+
+function openEditMeetingModal(index) {
+  const c = customers.find(c => c.id === currentCustomerId);
+  if (!c) return;
+  // detailBodyのmeetingsは逆順表示なので元のインデックスに変換
+  const meetings = c.meetings || [];
+  const realIndex = meetings.length - 1 - index;
+  const m = meetings[realIndex];
+  if (!m) return;
+
+  editingMeetingIndex = realIndex;
+  document.querySelector('#meetingModal .modal-header span').textContent = '✏️ 議事録を編集';
+  document.getElementById('meetingDate').value = m.date;
+  document.getElementById('meetingNotes').value = m.notes;
+  document.getElementById('meetingAction').value = m.action || '';
   document.getElementById('meetingNextContact').value = '';
   document.getElementById('meetingModal').classList.add('open');
 }
@@ -593,11 +627,19 @@ async function saveMeeting() {
   if (!c.meetings) c.meetings = [];
 
   const nextContact = document.getElementById('meetingNextContact').value;
-  c.meetings.push({
+  const meeting = {
     date:   document.getElementById('meetingDate').value,
     notes:  document.getElementById('meetingNotes').value,
     action: document.getElementById('meetingAction').value,
-  });
+  };
+
+  if (editingMeetingIndex !== null) {
+    // 編集モード：既存の議事録を上書き
+    c.meetings[editingMeetingIndex] = meeting;
+  } else {
+    // 新規追加
+    c.meetings.push(meeting);
+  }
   if (nextContact) c.nextContact = nextContact;
 
   // Gistに反映
